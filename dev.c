@@ -9,7 +9,7 @@
 #include "dev.h"
 
 // UTILS
-//
+
 static long get_last_modified(const char *name) {
   struct stat s;
   stat(name, &s);
@@ -30,7 +30,7 @@ typedef struct {
   size_t length;
 } SourceFiles;
 
-SourceFile *init_source_files(char *paths[], size_t length) {
+SourceFile *init_source_files(const char *paths[], size_t length) {
   SourceFile *files = malloc(length * sizeof(SourceFile));
 
   for (int i = 0; i < length; i++) {
@@ -155,6 +155,7 @@ enum NextAction { IDLE, REBUILD, HOT_RELOAD };
 typedef struct {
   SourceFiles *source;
   Dll *dll;
+  pthread_t watch_thread;
   enum NextAction action;
 } Dev;
 
@@ -213,15 +214,14 @@ void dev_check_watch(Dev *dev) {
   hot_reload(dev->dll);
 }
 
-void dev_create_watch_thread(Dev *dev) {
-  pthread_t watch_thread;
-  if (pthread_create(&watch_thread, NULL, (void *)dev_watch_update, dev) != 0) {
+void dev_create_watch_thread(Dev *dev, pthread_t *watch_thread) {
+  if (pthread_create(watch_thread, NULL, (void *)dev_watch_update, dev) != 0) {
     fprintf(stderr, "Error creating watch thread\n");
     exit(1);
   }
 }
 
-void dev_instance_start(char *source_paths[], char *dll_name,
+void dev_instance_start(const char *source_paths[], char *dll_name,
                         size_t source_length) {
   SourceFile *files = init_source_files(source_paths, source_length);
 
@@ -237,12 +237,30 @@ void dev_instance_start(char *source_paths[], char *dll_name,
   dev_instance->dll = dll;
   dev_instance->action = IDLE;
 
-  dev_create_watch_thread(dev_instance);
+  pthread_t watch_thread;
+  dev_create_watch_thread(dev_instance, &watch_thread);
+  dev_instance->watch_thread = watch_thread;
+
+  printf("Dev instance started\n");
 }
 
 void dev_instance_close() {
+  printf("Closing dev instance\n");
+
+  if (dev_instance->dll->handle) {
+    dlclose(dev_instance->dll->handle);
+  }
+
+  if (dev_instance->watch_thread) {
+    pthread_cancel(dev_instance->watch_thread);
+  }
+
+  free(dev_instance->dll);
   free(dev_instance->source->files);
-  free(dev_instance->dll->handle);
+  free(dev_instance->source);
+  free(dev_instance);
+
+  printf("Dev instance closed\n");
 }
 
 void dev_hot_reload_here() { dev_check_watch(dev_instance); }
