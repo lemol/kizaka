@@ -251,6 +251,10 @@ void dev_instance_close() {
     dlclose(dev_instance->dll->handle);
   }
 
+  if (dev_instance->dll->version != 0) {
+    rm_dll_file(dev_instance->dll->name, dev_instance->dll->version);
+  }
+
   if (dev_instance->watch_thread) {
     pthread_cancel(dev_instance->watch_thread);
   }
