@@ -21,7 +21,8 @@ static long get_last_modified(const char *name) {
 
 typedef struct {
   const char *name;
-  long last_modified;
+  long version;
+  long previous_version;
 } SourceFile;
 
 typedef struct {
@@ -34,7 +35,8 @@ SourceFile *init_source_files(char *paths[], size_t length) {
 
   for (int i = 0; i < length; i++) {
     files[i].name = paths[i];
-    files[i].last_modified = 0;
+    files[i].version = 0;
+    files[i].previous_version = 0;
   }
 
   return files;
@@ -47,11 +49,10 @@ bool should_rebuild(SourceFiles *source, int *changed_index,
   for (int i = 0; i < source->length; i++) {
     *new_last_modified = get_last_modified(files[i].name);
 
-    if (*new_last_modified == files[i].last_modified) {
+    if (*new_last_modified == files[i].version) {
       continue;
     }
 
-    printf("File %s changed\n", files[i].name);
     *changed_index = i;
 
     return true;
@@ -164,16 +165,26 @@ void dev_update(Dev *dev) {
   long new_last_modified;
 
   if (should_rebuild(dev->source, &changed_index, &new_last_modified)) {
-    printf("Source %s changed\n", dev->source->files[changed_index].name);
-    dev->source->files[changed_index].last_modified = new_last_modified;
-    dev->action = REBUILD;
+    SourceFile *changed_file = &dev->source->files[changed_index];
+
+    if (changed_file->version != 0) {
+      printf("Source %s changed\n", changed_file->name);
+      dev->action = REBUILD;
+    }
+
+    changed_file->previous_version = changed_file->version;
+    changed_file->version = new_last_modified;
     return;
   }
 
   if (should_hot_reload(dev->dll, &new_last_modified)) {
+    if (dev->dll->version != 0) {
+      dev->action = HOT_RELOAD;
+    }
+
     dev->dll->previous_version = dev->dll->version;
     dev->dll->version = new_last_modified;
-    dev->action = HOT_RELOAD;
+
     return;
   }
 }
