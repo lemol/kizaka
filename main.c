@@ -20,9 +20,8 @@ typedef struct {
   int width;
   int height;
   int dy;
+  bool is_dragging;
 } Bars;
-
-bool is_dragging_bars = false;
 
 typedef struct {
   Particle *particles;
@@ -31,7 +30,7 @@ typedef struct {
 } State;
 
 void OnBarsMouseButtonDown(Bars *bars, int x, int y) {
-  if (is_dragging_bars) {
+  if (bars->is_dragging) {
     return;
   }
 
@@ -52,11 +51,11 @@ void OnBarsMouseButtonDown(Bars *bars, int x, int y) {
     return;
   }
 
-  is_dragging_bars = true;
+  bars->is_dragging = true;
 }
 
-void OnBarsMouseButtonUp() {
-  if (!is_dragging_bars) {
+void OnBarsMouseButtonUp(Bars *bars) {
+  if (!bars->is_dragging) {
     return;
   }
 
@@ -64,11 +63,11 @@ void OnBarsMouseButtonUp() {
     return;
   }
 
-  is_dragging_bars = false;
+  bars->is_dragging = false;
 }
 
 void OnBarsDrag(Bars *bars, int x, int y) {
-  if (!is_dragging_bars) {
+  if (!bars->is_dragging) {
     return;
   }
 
@@ -90,7 +89,7 @@ void DrawBars(Bars bars) {
 void init_particles(Particle *particles, int n) {
   for (int i = 0; i < n; i++) {
     int y = rand() % 400;
-    float r = 2 + rand() % 10;
+    float r = 2 + rand() % 30;
     float vx = 10 + rand() % 100;
 
     particles[i] = (Particle){0};
@@ -139,8 +138,8 @@ State init() {
   srand(time(0));
 
   Vector2 bars_top_left = {200, 200};
-  Particle *particles = (Particle *)malloc(MAX_PARTICLES * sizeof(Particle));
   Bars bars = {bars_top_left, 300, 10, 90};
+  Particle *particles = (Particle *)malloc(MAX_PARTICLES * sizeof(Particle));
 
   State state = (State){particles, bars, MAX_PARTICLES};
 
@@ -149,17 +148,14 @@ State init() {
   return state;
 }
 
-void close(State *system) {
-  free(system->particles);
-  free(system);
-}
+void close_state(State *state) { free(state->particles); }
 
 void draw(State *state, float dt) {
   int x = GetMouseX();
   int y = GetMouseY();
 
   OnBarsMouseButtonDown(&state->bars, x, y);
-  OnBarsMouseButtonUp();
+  OnBarsMouseButtonUp(&state->bars);
   OnBarsDrag(&state->bars, x, y);
 
   DrawBars(state->bars);
@@ -167,7 +163,7 @@ void draw(State *state, float dt) {
 }
 
 int main(void) {
-  DEV_START(SOURCE_PATHS("main.c"), "./build/main.dylib", 1);
+  DEV_START(SOURCE_PATHS("main.c", "dev.c"), "./build/main.dylib", 1);
   DEV_HOT_RELOAD_DEFINE(State, init);
   DEV_HOT_RELOAD_DEFINE(void, draw, State *, float);
 
@@ -193,7 +189,7 @@ int main(void) {
   }
 
   CloseWindow();
-
+  close_state(&state);
   DEV_CLOSE();
 
   return 0;
