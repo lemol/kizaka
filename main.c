@@ -15,22 +15,22 @@ typedef struct {
   float radius;
 } Particle;
 
-struct Bars {
-  Vector2 tl;
+typedef struct {
+  Vector2 top_left;
   int width;
   int height;
   int dy;
-};
+} Bars;
 
 bool is_dragging_bars = false;
 
 typedef struct {
   Particle *particles;
-  struct Bars bars;
+  Bars bars;
   int n;
 } State;
 
-void OnBarsMouseButtonDown(struct Bars *bars, int x, int y) {
+void OnBarsMouseButtonDown(Bars *bars, int x, int y) {
   if (is_dragging_bars) {
     return;
   }
@@ -40,12 +40,13 @@ void OnBarsMouseButtonDown(struct Bars *bars, int x, int y) {
   }
 
   bool mouse_over_top = CheckCollisionPointRec(
-      (Vector2){x, y},
-      (Rectangle){bars->tl.x, bars->tl.y, bars->width, bars->height});
+      (Vector2){x, y}, (Rectangle){bars->top_left.x, bars->top_left.y,
+                                   bars->width, bars->height});
 
   bool mouse_over_bottom = CheckCollisionPointRec(
-      (Vector2){x, y}, (Rectangle){bars->tl.x, bars->tl.y + bars->dy,
-                                   bars->width, bars->height});
+      (Vector2){x, y},
+      (Rectangle){bars->top_left.x, bars->top_left.y + bars->dy, bars->width,
+                  bars->height});
 
   if (!mouse_over_top && !mouse_over_bottom) {
     return;
@@ -66,26 +67,27 @@ void OnBarsMouseButtonUp() {
   is_dragging_bars = false;
 }
 
-void OnBarsDrag(struct Bars *bars, int x, int y) {
+void OnBarsDrag(Bars *bars, int x, int y) {
   if (!is_dragging_bars) {
     return;
   }
 
-  bars->tl.x += x - bars->tl.x;
-  bars->tl.y += y - bars->tl.y;
+  bars->top_left.x += x - bars->top_left.x;
+  bars->top_left.y += y - bars->top_left.y;
 }
 
-void DrawBars(struct Bars bars) {
-  DrawRectangle(bars.tl.x, bars.tl.y, bars.width, bars.height, BARS_COLOR);
-  DrawRectangle(bars.tl.x, bars.tl.y + bars.dy, bars.width, bars.height,
-                (Color){0x04, 0xF0, 0x70, 0xFF});
+void DrawBars(Bars bars) {
+  DrawRectangle(bars.top_left.x, bars.top_left.y, bars.width, bars.height,
+                BARS_COLOR);
+  DrawRectangle(bars.top_left.x, bars.top_left.y + bars.dy, bars.width,
+                bars.height, (Color){0x54, 0xF0, 0x70, 0xFF});
 }
 
 #define DrawParticle(p) DrawCircleV(p.position, p.radius, p.color)
 #define RandomColor()                                                          \
   (Color) { rand() % 256, rand() % 256, rand() % 256, rand() % 256 }
 
-void InitParticles(Particle *particles, int n) {
+void init_particles(Particle *particles, int n) {
   for (int i = 0; i < n; i++) {
     int y = rand() % 400;
     float r = 2 + rand() % 10;
@@ -102,9 +104,9 @@ void InitParticles(Particle *particles, int n) {
 Vector2 fnDx(State *s, Particle *p, float dt) {
   float dx_mru = p->velocity.x * dt;
   bool inside_bars =
-      p->position.x + p->radius + dx_mru > s->bars.tl.x &&
-      s->bars.tl.y + s->bars.height < p->position.y &&
-      p->position.y < (s->bars.tl.y + s->bars.height + s->bars.dy);
+      p->position.x + p->radius + dx_mru > s->bars.top_left.x &&
+      s->bars.top_left.y + s->bars.height < p->position.y &&
+      p->position.y < (s->bars.top_left.y + s->bars.height + s->bars.dy);
 
   if (!inside_bars) {
     return (Vector2){dx_mru, 0};
@@ -114,8 +116,9 @@ Vector2 fnDx(State *s, Particle *p, float dt) {
   float e = 100;
   float m = 100;
 
-  float dvy = q * e * (p->position.x - s->bars.tl.x) / (m * p->velocity.x);
-  float dy = q * e * pow(p->position.x - s->bars.tl.x + p->radius, 2) /
+  float dvy =
+      q * e * (p->position.x - s->bars.top_left.x) / (m * p->velocity.x);
+  float dy = q * e * pow(p->position.x - s->bars.top_left.x + p->radius, 2) /
              (2 * m * p->velocity.x * p->velocity.x);
 
   return (Vector2){dvy, dy};
@@ -135,13 +138,13 @@ void MoveParticles(State *s, int n, float dt) {
 State init() {
   srand(time(0));
 
-  Vector2 barsTl = {200, 200};
+  Vector2 bars_top_left = {200, 200};
   Particle *particles = (Particle *)malloc(MAX_PARTICLES * sizeof(Particle));
-  struct Bars bars = {barsTl, 300, 10, 90};
+  Bars bars = {bars_top_left, 300, 10, 90};
 
   State state = (State){particles, bars, MAX_PARTICLES};
 
-  InitParticles(particles, MAX_PARTICLES);
+  init_particles(particles, MAX_PARTICLES);
 
   return state;
 }
@@ -151,22 +154,22 @@ void close(State *system) {
   free(system);
 }
 
-void update(State *system, float dt) {
+void draw(State *state, float dt) {
   int x = GetMouseX();
   int y = GetMouseY();
 
-  OnBarsMouseButtonDown(&system->bars, x, y);
+  OnBarsMouseButtonDown(&state->bars, x, y);
   OnBarsMouseButtonUp();
-  OnBarsDrag(&system->bars, x, y);
+  OnBarsDrag(&state->bars, x, y);
 
-  DrawBars(system->bars);
-  MoveParticles(system, system->n, dt);
+  DrawBars(state->bars);
+  MoveParticles(state, state->n, dt);
 }
 
 int main(void) {
-  DEV_START((char *[]){"main.c"}, "./build/main.dylib", 1);
+  DEV_START(SOURCE_PATHS("main.c"), "./build/main.dylib", 1);
   DEV_HOT_RELOAD_DEFINE(State, init);
-  DEV_HOT_RELOAD_DEFINE(void, update, State *, float);
+  DEV_HOT_RELOAD_DEFINE(void, draw, State *, float);
 
   InitWindow(800, 450, "raylib [core] example - basic window");
 
@@ -184,7 +187,7 @@ int main(void) {
     BeginDrawing();
     ClearBackground(BLACK);
 
-    DEV_WITH_HOT_RELOAD(update)(&state, dt);
+    DEV_WITH_HOT_RELOAD(draw)(&state, dt);
 
     EndDrawing();
   }
