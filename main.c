@@ -26,7 +26,7 @@ typedef struct {
 typedef struct {
   Particle *particles;
   Bars bars;
-  int n;
+  int particles_count;
 } State;
 
 void OnBarsMouseButtonDown(Bars *bars, int x, int y) {
@@ -34,7 +34,7 @@ void OnBarsMouseButtonDown(Bars *bars, int x, int y) {
     return;
   }
 
-  if (!IsMouseButtonDown(MOUSE_LEFT_BUTTON)) {
+  if (!IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
     return;
   }
 
@@ -75,7 +75,7 @@ void OnBarsDrag(Bars *bars, int x, int y) {
   bars->top_left.y += y - bars->top_left.y;
 }
 
-void DrawBars(Bars bars) {
+void bars_draw(Bars bars) {
   DrawRectangle(bars.top_left.x, bars.top_left.y, bars.width, bars.height,
                 BARS_COLOR);
   DrawRectangle(bars.top_left.x, bars.top_left.y + bars.dy, bars.width,
@@ -86,17 +86,20 @@ void DrawBars(Bars bars) {
 #define RandomColor()                                                          \
   (Color) { rand() % 256, rand() % 256, rand() % 256, rand() % 256 }
 
+void new_particle(Particle *p) {
+  int y = rand() % 400;
+  float r = 2 + rand() % 30;
+  float vx = 10 + rand() % 500;
+  *p = (Particle){0};
+  p->position = (Vector2){0, y};
+  p->velocity = (Vector2){vx, 0};
+  p->color = RandomColor();
+  p->radius = r;
+}
+
 void init_particles(Particle *particles, int n) {
   for (int i = 0; i < n; i++) {
-    int y = rand() % 400;
-    float r = 2 + rand() % 30;
-    float vx = 10 + rand() % 100;
-
-    particles[i] = (Particle){0};
-    particles[i].position = (Vector2){0, y};
-    particles[i].velocity = (Vector2){vx, 0};
-    particles[i].color = RandomColor();
-    particles[i].radius = r;
+    new_particle(&particles[i]);
   }
 }
 
@@ -123,14 +126,34 @@ Vector2 fnDx(State *s, Particle *p, float dt) {
   return (Vector2){dvy, dy};
 }
 
-void MoveParticles(State *s, int n, float dt) {
-  for (int i = 0; i < n; i++) {
-    float dx_mru = s->particles[i].velocity.x * dt;
-    Vector2 d = fnDx(s, &s->particles[i], dt);
-    s->particles[i].position.x += dx_mru;
-    s->particles[i].velocity.y += d.x;
-    s->particles[i].position.y += d.y;
-    DrawParticle(s->particles[i]);
+void particles_update(State *state, float dt) {
+  for (int i = 0; i < state->particles_count; i++) {
+    bool is_out = state->particles[i].position.x > GetScreenWidth() ||
+                  state->particles[i].position.y > GetScreenHeight();
+
+    bool is_in_bars = state->particles[i].position.x > state->bars.top_left.x &&
+                      state->particles[i].position.x <
+                          state->bars.top_left.x + state->bars.width &&
+                      state->particles[i].position.y > state->bars.top_left.y &&
+                      state->particles[i].position.y <
+                          state->bars.top_left.y + state->bars.height;
+
+    if (is_out || is_in_bars) {
+      new_particle(&state->particles[i]);
+      continue;
+    }
+
+    float dx_mru = state->particles[i].velocity.x * dt;
+    Vector2 d = fnDx(state, &state->particles[i], dt);
+    state->particles[i].position.x += dx_mru;
+    state->particles[i].velocity.y += d.x;
+    state->particles[i].position.y += d.y;
+  }
+}
+
+void particles_draw(Particle *particles, int count) {
+  for (int i = 0; i < count; i++) {
+    DrawParticle(particles[i]);
   }
 }
 
@@ -150,7 +173,7 @@ State init() {
 
 void close_state(State *state) { free(state->particles); }
 
-void draw(State *state, float dt) {
+void on_clock(State *state, float dt) {
   int x = GetMouseX();
   int y = GetMouseY();
 
@@ -158,13 +181,18 @@ void draw(State *state, float dt) {
   OnBarsMouseButtonUp(&state->bars);
   OnBarsDrag(&state->bars, x, y);
 
-  DrawBars(state->bars);
-  MoveParticles(state, state->n, dt);
+  particles_update(state, dt);
+}
+
+void draw(State *state, float dt) {
+  bars_draw(state->bars);
+  particles_draw(state->particles, state->particles_count);
 }
 
 int main(void) {
   DEV_START(SOURCE_PATHS("main.c", "dev.c"), "./build/main.dylib", 1);
   DEV_HOT_RELOAD_DEFINE(State, init);
+  DEV_HOT_RELOAD_DEFINE(void, on_clock, State *, float);
   DEV_HOT_RELOAD_DEFINE(void, draw, State *, float);
 
   InitWindow(800, 450, "raylib [core] example - basic window");
@@ -175,6 +203,7 @@ int main(void) {
     DEV_HOT_RELOAD_HERE();
 
     float dt = GetFrameTime();
+    DEV_WITH_HOT_RELOAD(on_clock)(&state, dt);
 
     if (IsKeyDown(KEY_R)) {
       state = DEV_WITH_HOT_RELOAD(init)();
