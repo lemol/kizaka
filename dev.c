@@ -63,7 +63,7 @@ bool should_rebuild(SourceFiles *source, int *changed_index,
 
 void rebuild() {
   printf("Rebuilding with 'make build'\n");
-  system("make build");
+  system("make dev-build");
 }
 
 // HOT RELOAD

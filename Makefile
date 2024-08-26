@@ -7,11 +7,14 @@ LIBS = ${RAYLIB_DLL} -L../glfw/build/src -lm -lglfw -framework Cocoa -framework 
 DYLD_LIBRARY_PATH = ${RAYLIB_DLL_DIR}
 
 dev: main.c dev.c prepare-dev
-	gcc -o ${BUILD_DIR}/main ${INCLUDES} dev.c main.c ${LIBS} && \
-		DYLD_LIBRARY_PATH=${RAYLIB_DLL_DIR} ./${BUILD_DIR}/main
+	gcc -o ${BUILD_DIR}/main-dev ${INCLUDES} -DDEV_MODE dev.c main.c ${LIBS} && \
+		DYLD_LIBRARY_PATH=${RAYLIB_DLL_DIR} ./${BUILD_DIR}/main-dev
+
+dev-build: main.c prepare-dev
+	gcc -shared -o ${BUILD_DIR}/main.dylib ${INCLUDES} main.c dev.c ${LIBS}
 
 build: main.c prepare-dev
-	gcc -shared -o ${BUILD_DIR}/main.dylib ${INCLUDES} main.c dev.c ${LIBS}
+	gcc -o ${BUILD_DIR}/main ${INCLUDES} main.c ${LIBS}
 
 prepare-dev:
 	mkdir -p ${BUILD_DIR}
