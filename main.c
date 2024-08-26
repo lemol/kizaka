@@ -4,15 +4,17 @@
 #include <stdlib.h>
 #include <time.h>
 
-#define MAX_PARTICLES 10
+#define MAX_PARTICLES 50
 #define BARS_COLOR                                                             \
   (Color) { 0x00, 0xFF, 0x0F, 0xFF }
 
 typedef struct {
   Vector2 position;
+  Vector2 velocity0;
   Vector2 velocity;
   Color color;
   float radius;
+  bool is_inside_field;
 } Particle;
 
 typedef struct {
@@ -84,50 +86,42 @@ void bars_draw(Bars bars) {
 #define RandomColor()                                                          \
   (Color) { rand() % 256, rand() % 256, rand() % 256, rand() % 256 }
 
-void particle_init(Particle *p) {
-  int y = rand() % 400;
-  float r = 2 + rand() % 30;
+void particle_init(Particle *p, int screen_height) {
+  int y = rand() % screen_height;
   float vx = 10 + rand() % 500;
   p->position = (Vector2){0, y};
+  p->velocity0 = (Vector2){vx, 0};
   p->velocity = (Vector2){vx, 0};
   p->color = RandomColor();
-  p->radius = r;
+  p->radius = 2 + rand() % 10;
+  p->is_inside_field = false;
 }
 
-void particles_init(Particles *particles, int count) {
+void particles_init(Particles *particles, int count, int screen_height) {
   particles->count = count;
   particles->items = (Particle *)malloc(count * sizeof(Particle));
 
   for (int i = 0; i < count; i++) {
-    particle_init(&particles->items[i]);
+    particle_init(&particles->items[i], screen_height);
   }
 }
 
-Vector2 fnDx(State *state, Particle *particle, float dt) {
-  float dx_mru = particle->velocity.x * dt;
-  Bars bars = state->bars;
+void particle_acelerate(Particle *p, float dt, State *state) {
+  p->position.x += p->velocity.x * dt;
 
-  bool inside_bars = bars.top.x < particle->position.x &&
-                     particle->position.x < bars.top.x + bars.top.width &&
-                     bars.top.y < particle->position.y &&
-                     particle->position.y < bars.top.y + bars.top.height;
-
-  if (!inside_bars) {
-    return (Vector2){dx_mru, 0};
+  if (!p->is_inside_field) {
+    return;
   }
 
-  float q = 0.1;
-  float e = 100;
-  float m = 100;
+  float q = 2.1;
+  float e = 400;
+  float m = p->radius * 50;
 
-  float dvy = q * e * (particle->position.x - state->bars.top.x) /
-              (m * particle->velocity.x);
-  float dy =
-      q * e *
-      pow(particle->position.x - state->bars.top.x + particle->radius, 2) /
-      (2 * m * particle->velocity.x * particle->velocity.x);
-
-  return (Vector2){dvy, dy};
+  p->velocity.y =
+      q * e * (p->position.x - state->bars.top.x) / (m * p->velocity0.x);
+  p->position.y += q * e *
+                   pow(p->position.x - state->bars.top.x + p->radius, 2) /
+                   (2 * m * p->velocity0.x * p->velocity0.x);
 }
 
 void particles_update(State *state, float dt) {
@@ -135,25 +129,30 @@ void particles_update(State *state, float dt) {
   Particles particles = state->particles;
 
   for (int i = 0; i < particles.count; i++) {
-    bool is_out = particles.items[i].position.x > GetScreenWidth() ||
-                  particles.items[i].position.y > GetScreenHeight();
-
     bool is_in_bars =
         CheckCollisionCircleRec(particles.items[i].position,
                                 particles.items[i].radius, bars.top) ||
         CheckCollisionCircleRec(particles.items[i].position,
                                 particles.items[i].radius, bars.bottom);
 
+    if (!particles.items[i].is_inside_field) {
+      Rectangle fieldRec = {bars.top.x, bars.top.y + bars.top.height,
+                            bars.top.width,
+                            bars.bottom.y - bars.top.y - bars.top.height};
+
+      particles.items[i].is_inside_field = CheckCollisionCircleRec(
+          particles.items[i].position, particles.items[i].radius, fieldRec);
+    }
+
+    bool is_out = particles.items[i].position.x > GetScreenWidth() ||
+                  particles.items[i].position.y > GetScreenHeight();
+
     if (is_out || is_in_bars) {
-      particle_init(&particles.items[i]);
+      particle_init(&particles.items[i], GetScreenHeight());
       continue;
     }
 
-    float dx_mru = particles.items[i].velocity.x * dt;
-    Vector2 d = fnDx(state, &particles.items[i], dt);
-    particles.items[i].position.x += dx_mru;
-    particles.items[i].velocity.y += d.x;
-    particles.items[i].position.y += d.y;
+    particle_acelerate(&particles.items[i], dt, state);
   }
 }
 
@@ -174,10 +173,10 @@ void init(State *state) {
 
   Bars bars;
   Vector2 bars_top_left = {200, 200};
-  bars_init(&bars, bars_top_left, 300, 10, 90);
+  bars_init(&bars, bars_top_left, 400, 10, 160);
 
   Particles particles;
-  particles_init(&particles, MAX_PARTICLES);
+  particles_init(&particles, MAX_PARTICLES, GetScreenHeight());
 
   state->particles = particles;
   state->bars = bars;
@@ -209,6 +208,7 @@ int main(void) {
   State state;
   DEV_WITH_HOT_RELOAD(init)(&state);
 
+  SetConfigFlags(FLAG_WINDOW_RESIZABLE | FLAG_VSYNC_HINT);
   InitWindow(800, 450, "raylib [core] example - basic window");
   SetTargetFPS(60);
 
