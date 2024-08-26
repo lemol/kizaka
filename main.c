@@ -86,23 +86,27 @@ void bars_draw(Bars bars) {
 #define RandomColor()                                                          \
   (Color) { rand() % 256, rand() % 256, rand() % 256, rand() % 256 }
 
-void particle_init(Particle *p, int screen_height) {
-  int y = rand() % screen_height;
-  float vx = 10 + rand() % 500;
+void particle_init(Particle *p, int min_height, int max_height) {
+  float radius = 2 + rand() % 10;
+  int y =
+      min_height + rand() % (max_height - min_height) + (int)round(radius) * 2;
+  float vx0 = 10 + rand() % 500;
+
   p->position = (Vector2){0, y};
-  p->velocity0 = (Vector2){vx, 0};
-  p->velocity = (Vector2){vx, 0};
+  p->velocity0 = (Vector2){vx0, 0};
+  p->velocity = (Vector2){vx0, 0};
   p->color = RandomColor();
   p->radius = 2 + rand() % 10;
   p->is_inside_field = false;
 }
 
-void particles_init(Particles *particles, int count, int screen_height) {
+void particles_init(Particles *particles, int count, int min_height,
+                    int max_height) {
   particles->count = count;
   particles->items = (Particle *)malloc(count * sizeof(Particle));
 
   for (int i = 0; i < count; i++) {
-    particle_init(&particles->items[i], screen_height);
+    particle_init(&particles->items[i], min_height, max_height);
   }
 }
 
@@ -148,7 +152,9 @@ void particles_update(State *state, float dt) {
                   particles.items[i].position.y > GetScreenHeight();
 
     if (is_out || is_in_bars) {
-      particle_init(&particles.items[i], GetScreenHeight());
+      particle_init(&particles.items[i],
+                    state->bars.top.y + state->bars.top.height,
+                    state->bars.bottom.y);
       continue;
     }
 
@@ -176,7 +182,8 @@ void init(State *state) {
   bars_init(&bars, bars_top_left, 400, 10, 160);
 
   Particles particles;
-  particles_init(&particles, MAX_PARTICLES, GetScreenHeight());
+  particles_init(&particles, MAX_PARTICLES, bars.top.y + bars.top.height,
+                 bars.bottom.y);
 
   state->particles = particles;
   state->bars = bars;
