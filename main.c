@@ -14,6 +14,8 @@ typedef struct {
   Vector2 velocity;
   Color color;
   float radius;
+  float charge;
+  float mass;
   bool is_inside_field;
 } Particle;
 
@@ -88,15 +90,17 @@ void bars_draw(Bars bars) {
 
 void particle_init(Particle *p, int min_height, int max_height) {
   float radius = 2 + rand() % 10;
-  int y =
-      min_height + rand() % (max_height - min_height) + (int)round(radius) * 2;
-  float vx0 = 10 + rand() % 500;
+  float vx0 = 50 + rand() % 100;
+  int y = min_height + (int)round(radius) +
+          rand() % (max_height - min_height - 2 * (int)round(radius));
 
   p->position = (Vector2){0, y};
   p->velocity0 = (Vector2){vx0, 0};
   p->velocity = (Vector2){vx0, 0};
   p->color = RandomColor();
   p->radius = 2 + rand() % 10;
+  p->charge = rand() % 100 - 50;
+  p->mass = p->radius * 5;
   p->is_inside_field = false;
 }
 
@@ -117,15 +121,13 @@ void particle_acelerate(Particle *p, float dt, State *state) {
     return;
   }
 
-  float q = 2.1;
-  float e = 400;
-  float m = p->radius * 50;
+  float e = 0.9;
 
-  p->velocity.y =
-      q * e * (p->position.x - state->bars.top.x) / (m * p->velocity0.x);
-  p->position.y += q * e *
+  p->velocity.y = p->charge * e * (p->position.x - state->bars.top.x) /
+                  (p->mass * p->velocity0.x);
+  p->position.y += p->charge * e *
                    pow(p->position.x - state->bars.top.x + p->radius, 2) /
-                   (2 * m * p->velocity0.x * p->velocity0.x);
+                   (2 * p->mass * p->velocity0.x * p->velocity0.x);
 }
 
 void particles_update(State *state, float dt) {
@@ -139,15 +141,6 @@ void particles_update(State *state, float dt) {
         CheckCollisionCircleRec(particles.items[i].position,
                                 particles.items[i].radius, bars.bottom);
 
-    if (!particles.items[i].is_inside_field) {
-      Rectangle fieldRec = {bars.top.x, bars.top.y + bars.top.height,
-                            bars.top.width,
-                            bars.bottom.y - bars.top.y - bars.top.height};
-
-      particles.items[i].is_inside_field = CheckCollisionCircleRec(
-          particles.items[i].position, particles.items[i].radius, fieldRec);
-    }
-
     bool is_out = particles.items[i].position.x > GetScreenWidth() ||
                   particles.items[i].position.y > GetScreenHeight();
 
@@ -157,6 +150,13 @@ void particles_update(State *state, float dt) {
                     state->bars.bottom.y);
       continue;
     }
+
+    Rectangle fieldRec = {bars.top.x, bars.top.y + bars.top.height,
+                          bars.top.width,
+                          bars.bottom.y - bars.top.y - bars.top.height};
+
+    particles.items[i].is_inside_field = CheckCollisionCircleRec(
+        particles.items[i].position, particles.items[i].radius, fieldRec);
 
     particle_acelerate(&particles.items[i], dt, state);
   }
