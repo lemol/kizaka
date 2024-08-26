@@ -16,15 +16,19 @@ typedef struct {
 } Particle;
 
 typedef struct {
+  Particle *items;
+  int count;
+} Particles;
+
+typedef struct {
   Rectangle top;
   Rectangle bottom;
   bool is_dragging;
 } Bars;
 
 typedef struct {
-  Particle *particles;
+  Particles particles;
   Bars bars;
-  int particles_count;
 } State;
 
 void OnBarsMouseButtonDown(Bars *bars, Vector2 mouse) {
@@ -80,20 +84,22 @@ void bars_draw(Bars bars) {
 #define RandomColor()                                                          \
   (Color) { rand() % 256, rand() % 256, rand() % 256, rand() % 256 }
 
-void new_particle(Particle *p) {
+void particle_init(Particle *p) {
   int y = rand() % 400;
   float r = 2 + rand() % 30;
   float vx = 10 + rand() % 500;
-  *p = (Particle){0};
   p->position = (Vector2){0, y};
   p->velocity = (Vector2){vx, 0};
   p->color = RandomColor();
   p->radius = r;
 }
 
-void init_particles(Particle *particles, int n) {
-  for (int i = 0; i < n; i++) {
-    new_particle(&particles[i]);
+void particles_init(Particles *particles, int count) {
+  particles->count = count;
+  particles->items = (Particle *)malloc(count * sizeof(Particle));
+
+  for (int i = 0; i < count; i++) {
+    particle_init(&particles->items[i]);
   }
 }
 
@@ -126,57 +132,58 @@ Vector2 fnDx(State *state, Particle *particle, float dt) {
 
 void particles_update(State *state, float dt) {
   Bars bars = state->bars;
+  Particles particles = state->particles;
 
-  for (int i = 0; i < state->particles_count; i++) {
-    bool is_out = state->particles[i].position.x > GetScreenWidth() ||
-                  state->particles[i].position.y > GetScreenHeight();
+  for (int i = 0; i < particles.count; i++) {
+    bool is_out = particles.items[i].position.x > GetScreenWidth() ||
+                  particles.items[i].position.y > GetScreenHeight();
 
     bool is_in_bars =
-        CheckCollisionCircleRec(state->particles[i].position,
-                                state->particles[i].radius, bars.top) ||
-        CheckCollisionCircleRec(state->particles[i].position,
-                                state->particles[i].radius, bars.bottom);
+        CheckCollisionCircleRec(particles.items[i].position,
+                                particles.items[i].radius, bars.top) ||
+        CheckCollisionCircleRec(particles.items[i].position,
+                                particles.items[i].radius, bars.bottom);
 
     if (is_out || is_in_bars) {
-      new_particle(&state->particles[i]);
+      particle_init(&particles.items[i]);
       continue;
     }
 
-    float dx_mru = state->particles[i].velocity.x * dt;
-    Vector2 d = fnDx(state, &state->particles[i], dt);
-    state->particles[i].position.x += dx_mru;
-    state->particles[i].velocity.y += d.x;
-    state->particles[i].position.y += d.y;
+    float dx_mru = particles.items[i].velocity.x * dt;
+    Vector2 d = fnDx(state, &particles.items[i], dt);
+    particles.items[i].position.x += dx_mru;
+    particles.items[i].velocity.y += d.x;
+    particles.items[i].position.y += d.y;
   }
 }
 
-void particles_draw(Particle *particles, int count) {
-  for (int i = 0; i < count; i++) {
-    DrawParticle(particles[i]);
+void particles_draw(Particles *particles) {
+  for (int i = 0; i < particles->count; i++) {
+    DrawParticle(particles->items[i]);
   }
 }
 
-Bars bars_new(Vector2 top_left, int width, int height, int dy) {
-  Rectangle top = {top_left.x, top_left.y, width, height};
-  Rectangle bottom = {top_left.x, top_left.y + dy, width, height};
-  return (Bars){top, bottom, false};
+void bars_init(Bars *bars, Vector2 top_left, int width, int height, int dy) {
+  bars->top = (Rectangle){top_left.x, top_left.y, width, height};
+  bars->bottom = (Rectangle){top_left.x, top_left.y + dy, width, height};
+  bars->is_dragging = false;
 }
 
-State init() {
+void init(State *state) {
   srand(time(0));
 
+  Bars bars;
   Vector2 bars_top_left = {200, 200};
-  Bars bars = bars_new(bars_top_left, 300, 10, 90);
-  Particle *particles = (Particle *)malloc(MAX_PARTICLES * sizeof(Particle));
+  bars_init(&bars, bars_top_left, 300, 10, 90);
 
-  State state = (State){particles, bars, MAX_PARTICLES};
+  Particles particles;
+  particles_init(&particles, MAX_PARTICLES);
 
-  init_particles(particles, MAX_PARTICLES);
-
-  return state;
+  state->particles = particles;
+  state->bars = bars;
 }
 
-void close_state(State *state) { free(state->particles); }
+void close(State *state) { free(state->particles.items); }
 
 void on_clock(State *state, float dt) {
   Vector2 mouse = GetMousePosition();
@@ -190,16 +197,17 @@ void on_clock(State *state, float dt) {
 
 void draw(State *state, float dt) {
   bars_draw(state->bars);
-  particles_draw(state->particles, state->particles_count);
+  particles_draw(&state->particles);
 }
 
 int main(void) {
   DEV_START(SOURCE_PATHS("main.c", "dev.c"), "./build/main.dylib", 1);
-  DEV_HOT_RELOAD_DEFINE(State, init);
+  DEV_HOT_RELOAD_DEFINE(void, init, State *);
   DEV_HOT_RELOAD_DEFINE(void, on_clock, State *, float);
   DEV_HOT_RELOAD_DEFINE(void, draw, State *, float);
 
-  State state = DEV_WITH_HOT_RELOAD(init)();
+  State state;
+  DEV_WITH_HOT_RELOAD(init)(&state);
 
   InitWindow(800, 450, "raylib [core] example - basic window");
   SetTargetFPS(60);
@@ -211,7 +219,7 @@ int main(void) {
     DEV_WITH_HOT_RELOAD(on_clock)(&state, dt);
 
     if (IsKeyDown(KEY_R)) {
-      state = DEV_WITH_HOT_RELOAD(init)();
+      DEV_WITH_HOT_RELOAD(init)(&state);
     }
 
     BeginDrawing();
@@ -223,7 +231,7 @@ int main(void) {
   }
 
   CloseWindow();
-  close_state(&state);
+  close(&state);
   DEV_CLOSE();
 
   return 0;
