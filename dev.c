@@ -6,6 +6,8 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#define DEV_MODE
+
 #include "dev.h"
 
 // UTILS
