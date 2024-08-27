@@ -102,7 +102,7 @@ void coil_draw(DeflectionCoil coil) {
 
 #define DrawParticle(p) DrawCircleV(p.position, p.radius, p.color)
 #define RandomColor()                                                          \
-  (Color) { rand() % 256, rand() % 256, rand() % 256, rand() % 256 }
+  (Color) { rand() % 256, rand() % 256, rand() % 256, 100 + rand() % 156 }
 
 void particle_init(Particle *p, int min_height, int max_height) {
   float radius = 2 + rand() % 10;
@@ -238,6 +238,8 @@ int main(void) {
     ClearBackground(BLACK);
 
     DEV_WITH_HOT_RELOAD(draw)(&state, dt);
+
+    DrawText(TextFormat("FPS: %i", GetFPS()), 10, 10, 20, GREEN);
 
     EndDrawing();
   }
