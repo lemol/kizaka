@@ -1,11 +1,12 @@
 #include "dev.h"
 #include "raylib.h"
 #include <math.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
 
 #define MAX_PARTICLES 50
-#define BARS_COLOR                                                             \
+#define COIL_COLOR                                                             \
   (Color) { 0x00, 0xFF, 0x0F, 0xFF }
 
 typedef struct {
@@ -16,7 +17,7 @@ typedef struct {
   float radius;
   float charge;
   float mass;
-  bool is_inside_field;
+  bool is_in_coil_field;
 } Particle;
 
 typedef struct {
@@ -28,15 +29,24 @@ typedef struct {
   Rectangle top;
   Rectangle bottom;
   bool is_dragging;
-} Bars;
+  float field_intensity;
+} DeflectionCoil;
 
 typedef struct {
   Particles particles;
-  Bars bars;
+  DeflectionCoil coil;
 } State;
 
-void OnBarsMouseButtonDown(Bars *bars, Vector2 mouse) {
-  if (bars->is_dragging) {
+void coil_init(DeflectionCoil *coil, Vector2 top_left, int width, int height,
+               int dy) {
+  coil->top = (Rectangle){top_left.x, top_left.y, width, height};
+  coil->bottom = (Rectangle){top_left.x, top_left.y + dy, width, height};
+  coil->is_dragging = false;
+  coil->field_intensity = 30;
+}
+
+void coil_on_mouse_button_down(DeflectionCoil *coil, Vector2 mouse) {
+  if (coil->is_dragging) {
     return;
   }
 
@@ -44,18 +54,18 @@ void OnBarsMouseButtonDown(Bars *bars, Vector2 mouse) {
     return;
   }
 
-  bool mouse_over_top = CheckCollisionPointRec(mouse, bars->top);
-  bool mouse_over_bottom = CheckCollisionPointRec(mouse, bars->bottom);
+  bool mouse_over_top = CheckCollisionPointRec(mouse, coil->top);
+  bool mouse_over_bottom = CheckCollisionPointRec(mouse, coil->bottom);
 
   if (!mouse_over_top && !mouse_over_bottom) {
     return;
   }
 
-  bars->is_dragging = true;
+  coil->is_dragging = true;
 }
 
-void OnBarsMouseButtonUp(Bars *bars) {
-  if (!bars->is_dragging) {
+void coil_on_mouse_button_up(DeflectionCoil *coil) {
+  if (!coil->is_dragging) {
     return;
   }
 
@@ -63,25 +73,32 @@ void OnBarsMouseButtonUp(Bars *bars) {
     return;
   }
 
-  bars->is_dragging = false;
+  coil->is_dragging = false;
 }
 
-void OnBarsDrag(Bars *bars, Vector2 mouse) {
-  if (!bars->is_dragging) {
+void coil_on_drag(DeflectionCoil *coil, Vector2 mouse) {
+  if (!coil->is_dragging) {
     return;
   }
 
   Vector2 dmouse = GetMouseDelta();
 
-  bars->top.x += dmouse.x;
-  bars->top.y += dmouse.y;
-  bars->bottom.x = bars->top.x;
-  bars->bottom.y += dmouse.y;
+  coil->top.x += dmouse.x;
+  coil->top.y += dmouse.y;
+  coil->bottom.x = coil->top.x;
+  coil->bottom.y += dmouse.y;
 }
 
-void bars_draw(Bars bars) {
-  DrawRectangleRec(bars.top, BARS_COLOR);
-  DrawRectangleRec(bars.bottom, BARS_COLOR);
+void coil_update(State *state, float dt) {
+  Vector2 mouse = GetMousePosition();
+  coil_on_mouse_button_down(&state->coil, mouse);
+  coil_on_mouse_button_up(&state->coil);
+  coil_on_drag(&state->coil, mouse);
+}
+
+void coil_draw(DeflectionCoil coil) {
+  DrawRectangleRec(coil.top, COIL_COLOR);
+  DrawRectangleRec(coil.bottom, COIL_COLOR);
 }
 
 #define DrawParticle(p) DrawCircleV(p.position, p.radius, p.color)
@@ -90,7 +107,7 @@ void bars_draw(Bars bars) {
 
 void particle_init(Particle *p, int min_height, int max_height) {
   float radius = 2 + rand() % 10;
-  float vx0 = 50 + rand() % 100;
+  float vx0 = 50 + rand() % 500;
   int y = min_height + (int)round(radius) +
           rand() % (max_height - min_height - 2 * (int)round(radius));
 
@@ -100,8 +117,8 @@ void particle_init(Particle *p, int min_height, int max_height) {
   p->color = RandomColor();
   p->radius = 2 + rand() % 10;
   p->charge = rand() % 100 - 50;
-  p->mass = p->radius * 5;
-  p->is_inside_field = false;
+  p->mass = p->radius * 25;
+  p->is_in_coil_field = false;
 }
 
 void particles_init(Particles *particles, int count, int min_height,
@@ -117,45 +134,45 @@ void particles_init(Particles *particles, int count, int min_height,
 void particle_acelerate(Particle *p, float dt, State *state) {
   p->position.x += p->velocity.x * dt;
 
-  if (!p->is_inside_field) {
+  if (!p->is_in_coil_field) {
+    p->position.y += p->velocity.y * dt;
     return;
   }
 
-  float e = 0.9;
-
-  p->velocity.y = p->charge * e * (p->position.x - state->bars.top.x) /
-                  (p->mass * p->velocity0.x);
-  p->position.y += p->charge * e *
-                   pow(p->position.x - state->bars.top.x + p->radius, 2) /
+  p->velocity.y += p->charge * state->coil.field_intensity *
+                   (p->position.x - state->coil.top.x) /
+                   (p->mass * p->velocity0.x);
+  p->position.y += p->charge * state->coil.field_intensity *
+                   pow(p->position.x - state->coil.top.x + p->radius, 2) /
                    (2 * p->mass * p->velocity0.x * p->velocity0.x);
 }
 
 void particles_update(State *state, float dt) {
-  Bars bars = state->bars;
+  DeflectionCoil coil = state->coil;
   Particles particles = state->particles;
 
   for (int i = 0; i < particles.count; i++) {
-    bool is_in_bars =
+    bool has_coil_collision =
         CheckCollisionCircleRec(particles.items[i].position,
-                                particles.items[i].radius, bars.top) ||
+                                particles.items[i].radius, coil.top) ||
         CheckCollisionCircleRec(particles.items[i].position,
-                                particles.items[i].radius, bars.bottom);
+                                particles.items[i].radius, coil.bottom);
 
     bool is_out = particles.items[i].position.x > GetScreenWidth() ||
                   particles.items[i].position.y > GetScreenHeight();
 
-    if (is_out || is_in_bars) {
+    if (is_out || has_coil_collision) {
       particle_init(&particles.items[i],
-                    state->bars.top.y + state->bars.top.height,
-                    state->bars.bottom.y);
+                    state->coil.top.y + state->coil.top.height,
+                    state->coil.bottom.y);
       continue;
     }
 
-    Rectangle fieldRec = {bars.top.x, bars.top.y + bars.top.height,
-                          bars.top.width,
-                          bars.bottom.y - bars.top.y - bars.top.height};
+    Rectangle fieldRec = {coil.top.x, coil.top.y + coil.top.height,
+                          coil.top.width,
+                          coil.bottom.y - coil.top.y - coil.top.height};
 
-    particles.items[i].is_inside_field = CheckCollisionCircleRec(
+    particles.items[i].is_in_coil_field = CheckCollisionCircleRec(
         particles.items[i].position, particles.items[i].radius, fieldRec);
 
     particle_acelerate(&particles.items[i], dt, state);
@@ -168,41 +185,30 @@ void particles_draw(Particles *particles) {
   }
 }
 
-void bars_init(Bars *bars, Vector2 top_left, int width, int height, int dy) {
-  bars->top = (Rectangle){top_left.x, top_left.y, width, height};
-  bars->bottom = (Rectangle){top_left.x, top_left.y + dy, width, height};
-  bars->is_dragging = false;
-}
-
 void init(State *state) {
   srand(time(0));
 
-  Bars bars;
+  DeflectionCoil coil;
   Vector2 bars_top_left = {200, 200};
-  bars_init(&bars, bars_top_left, 400, 10, 160);
+  coil_init(&coil, bars_top_left, 300, 10, 160);
 
   Particles particles;
-  particles_init(&particles, MAX_PARTICLES, bars.top.y + bars.top.height,
-                 bars.bottom.y);
+  particles_init(&particles, MAX_PARTICLES, coil.top.y + coil.top.height,
+                 coil.bottom.y);
 
   state->particles = particles;
-  state->bars = bars;
+  state->coil = coil;
 }
 
 void close(State *state) { free(state->particles.items); }
 
 void on_clock(State *state, float dt) {
-  Vector2 mouse = GetMousePosition();
-
-  OnBarsMouseButtonDown(&state->bars, mouse);
-  OnBarsMouseButtonUp(&state->bars);
-  OnBarsDrag(&state->bars, mouse);
-
+  coil_update(state, dt);
   particles_update(state, dt);
 }
 
 void draw(State *state, float dt) {
-  bars_draw(state->bars);
+  coil_draw(state->coil);
   particles_draw(&state->particles);
 }
 
