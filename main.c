@@ -199,7 +199,11 @@ void init(State *state) {
   state->coil = coil;
 }
 
-void close(State *state) { free(state->particles.items); }
+// WTF is this?
+// Naming this as `close` causes SEGFAULT in linux
+// From what I've debugged, it happens around libGLX, mesa, and stuff
+// If you know why, please let me know
+void close_WTFFFF(State *state) { free(state->particles.items); }
 
 void on_clock(State *state, float dt) {
   coil_update(state, dt);
@@ -212,7 +216,7 @@ void draw(State *state, float dt) {
 }
 
 int main(void) {
-  DEV_START(SOURCE_PATHS("main.c", "dev.c"), "./build/main.dylib", 1);
+  DEV_START(SOURCE_PATHS("main.c", "dev.c"), DLL_NAME("main"), 1);
   DEV_HOT_RELOAD_DEFINE(void, init, State *);
   DEV_HOT_RELOAD_DEFINE(void, on_clock, State *, float);
   DEV_HOT_RELOAD_DEFINE(void, draw, State *, float);
@@ -245,7 +249,7 @@ int main(void) {
   }
 
   CloseWindow();
-  close(&state);
+  close_WTFFFF(&state);
   DEV_CLOSE();
 
   return 0;

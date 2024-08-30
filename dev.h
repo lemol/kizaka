@@ -3,11 +3,35 @@
 
 #include <stdlib.h>
 
+#if defined(__APPLE__) || defined(__MACH__)
+#define OS_MACOS
+#endif
+
+#if defined(__linux__)
+#define OS_LINUX
+#endif
+
+#if defined(_WIN32) || defined(_WIN64) || defined(__CYGWIN__)
+#define OS_WINDOWS
+#endif
+
+#ifdef OS_MACOS
+#define DLL_NAME(name) #name ".dylib"
+#endif
+
+#ifdef OS_LINUX
+#define DLL_NAME(name) name ".so"
+#endif
+
+#ifdef OS_WINDOWS
+#define DLL_NAME(name) #name ".dll"
+#endif
+
 #define NOOP (void)0
 #define SOURCE_PATHS(...)                                                      \
   (const char *[]) { __VA_ARGS__ }
 
-#ifndef DEV_MODE
+#ifndef _DEV_MODE
 #define DEV_START(source_paths, dll_name, source_length) NOOP
 
 #define DEV_HOT_RELOAD_HERE() NOOP

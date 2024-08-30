@@ -1,2 +1,2 @@
 CompileFlags:
-  Add: -I../raylib/src/
+  Add: [-I../raylib/src/]

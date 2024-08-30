@@ -1,5 +1,6 @@
 #include <dlfcn.h>
 #include <pthread.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -16,9 +17,14 @@
 
 static long get_last_modified(const char *name) {
   struct stat s;
-  stat(name, &s);
 
+#ifdef OS_MAC
   return s.st_mtimespec.tv_sec;
+#endif
+
+#ifdef OS_LINUX
+  return s.st_mtim.tv_sec;
+#endif
 }
 
 // SOURCE FILES
