@@ -136,7 +136,7 @@ void hot_reload(Dll *dll) {
 #ifndef OS_LINUX
     dlclose(dll->handle);
 #else
-// WTF this is not working on Linux????
+// TODO: WTF this is not working on Linux????
 #endif
 
     rm_dll_file(dll->name, dll->previous_version);
@@ -160,6 +160,8 @@ void hot_reload(Dll *dll) {
 
     *((void **)f.function) = ptr;
   }
+
+  free(new_dll_name);
 
   printf("Hot reload successful\n");
 }
@@ -264,7 +266,11 @@ void dev_instance_close() {
   printf("Closing dev instance\n");
 
   if (dev_instance->dll->handle) {
+#ifndef OS_LINUX
     dlclose(dev_instance->dll->handle);
+#else
+// TODO: WTF this is not working on Linux????
+#endif
   }
 
   if (dev_instance->dll->version != 0) {
