@@ -6,7 +6,7 @@
 
 #define MAX_PARTICLES 50
 #define COIL_COLOR                                                             \
-  (Color) { 0x00, 0xFF, 0x0F, 0xFF }
+  (Color) { 0x33, 0xAF, 0x0F, 0xFF }
 
 typedef struct {
   Vector2 position;
@@ -216,7 +216,7 @@ void draw(State *state, float dt) {
 }
 
 int main(void) {
-  DEV_START(SOURCE_PATHS("main.c", "dev.c"), DLL_NAME("main"), 1);
+  DEV_START(SOURCE_PATHS("main.c", "dev.c"), DLL_NAME("./build/main"), 2);
   DEV_HOT_RELOAD_DEFINE(void, init, State *);
   DEV_HOT_RELOAD_DEFINE(void, on_clock, State *, float);
   DEV_HOT_RELOAD_DEFINE(void, draw, State *, float);

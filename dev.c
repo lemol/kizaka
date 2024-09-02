@@ -17,6 +17,7 @@
 
 static long get_last_modified(const char *name) {
   struct stat s;
+  stat(name, &s);
 
 #ifdef OS_MAC
   return s.st_mtimespec.tv_sec;
@@ -106,7 +107,7 @@ bool should_hot_reload(Dll *dll, long *new_last_modified) {
 
 char *duplicate_dll_file(Dll *dll, long version) {
   char fpath[FILENAME_MAX];
-  sprintf(fpath, "%s-%ld", dll->name, version);
+  sprintf(fpath, "%s.%ld", dll->name, version);
 
   char cmd[FILENAME_MAX * 2 + 64];
   sprintf(cmd, "cp %s %s", dll->name, fpath);
@@ -119,7 +120,7 @@ char *duplicate_dll_file(Dll *dll, long version) {
 
 void rm_dll_file(const char *name, long version) {
   char fpath[FILENAME_MAX];
-  sprintf(fpath, "%s-%ld", name, version);
+  sprintf(fpath, "%s.%ld", name, version);
 
   char cmd[FILENAME_MAX + 32];
   sprintf(cmd, "rm %s", fpath);
@@ -132,7 +133,12 @@ void hot_reload(Dll *dll) {
   char *new_dll_name = duplicate_dll_file(dll, dll->version);
 
   if (dll->handle) {
+#ifndef OS_LINUX
     dlclose(dll->handle);
+#else
+// WTF this is not working on Linux????
+#endif
+
     rm_dll_file(dll->name, dll->previous_version);
   }
 

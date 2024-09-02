@@ -30,7 +30,7 @@ dev: main.c dev.c prepare-dev
 		${BUILD_DIR}/main-dev
 
 dev-build: main.c prepare-dev
-	gcc -ggdb -shared -o ${BUILD_DIR}/main.${DLL_EXTENSION} ${INCLUDES} main.c dev.c ${LIBS}
+	gcc -ggdb -shared -fPIC -o ${BUILD_DIR}/main.${DLL_EXTENSION} ${INCLUDES} -D_DEV_MODE main.c dev.c ${LIBS}
 
 build: main.c prepare-dev
 	gcc -o ${BUILD_DIR}/main ${INCLUDES} main.c ${LIBS}
