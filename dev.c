@@ -19,7 +19,7 @@ static long get_last_modified(const char *name) {
   struct stat s;
   stat(name, &s);
 
-#ifdef OS_MAC
+#if defined(__APPLE__) && defined(__MACH__)
   return s.st_mtimespec.tv_sec;
 #endif
 
